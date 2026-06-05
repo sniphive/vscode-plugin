@@ -1,0 +1,227 @@
+{
+  "name": "sniphive",
+  "displayName": "SnipHive",
+  "description": "Securely manage and access your code snippets with end-to-end encryption",
+  "version": "0.1.0",
+  "publisher": "sniphive",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sniphive/vscode-sniphive"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "snippet",
+    "code",
+    "encryption",
+    "e2ee",
+    "notes"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "SnipHive",
+      "properties": {
+        "sniphive.apiUrl": {
+          "type": "string",
+          "default": "https://api.sniphive.net",
+          "description": "Custom SnipHive API URL for self-hosted deployments"
+        },
+        "sniphive.defaultWorkspace": {
+          "type": "string",
+          "default": "",
+          "description": "Default workspace UUID to use on startup"
+        },
+        "sniphive.autoRefreshInterval": {
+          "type": "number",
+          "default": 0,
+          "description": "Auto-refresh interval in seconds (0 = disabled)"
+        },
+        "sniphive.rememberMasterPassword": {
+          "type": "boolean",
+          "default": true,
+          "description": "Store master password securely for auto-unlock"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "sniphive.createSnippet",
+        "title": "Create Snippet",
+        "category": "SnipHive"
+      },
+      {
+        "command": "sniphive.insertSnippet",
+        "title": "Insert Snippet...",
+        "category": "SnipHive"
+      },
+      {
+        "command": "sniphive.refresh",
+        "title": "Refresh Snippets",
+        "category": "SnipHive",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sniphive.openSettings",
+        "title": "Open Settings",
+        "category": "SnipHive"
+      },
+      {
+        "command": "sniphive.setupE2EE",
+        "title": "Setup E2EE...",
+        "category": "SnipHive"
+      },
+      {
+        "command": "sniphive.importGist",
+        "title": "Import GitHub Gist...",
+        "category": "SnipHive"
+      },
+      {
+        "command": "sniphive.manageTags",
+        "title": "Manage Tags...",
+        "category": "SnipHive"
+      },
+      {
+        "command": "sniphive.showRecent",
+        "title": "Recent Snippets",
+        "category": "SnipHive"
+      },
+      {
+        "command": "sniphive.logout",
+        "title": "Logout",
+        "category": "SnipHive"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "sniphive.createSnippet",
+          "group": "SnipHive@1",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "sniphive.insertSnippet",
+          "group": "SnipHive@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sniphive.insertSnippet",
+          "when": "viewItem == sniphiveSnippetItem",
+          "group": "inline@1"
+        },
+        {
+          "command": "sniphive.createSnippet",
+          "when": "viewItem == sniphiveSnippetItem",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sniphive.refresh",
+          "when": "view == sniphiveSnippets || view == sniphiveNotes || view == sniphiveFavorites || view == sniphivePinned || view == sniphiveArchive",
+          "group": "navigation@99"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "sniphive.refresh",
+          "when": "view == sniphiveSnippets || view == sniphiveNotes || view == sniphiveFavorites || view == sniphivePinned || view == sniphiveArchive",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "sniphive.createSnippet",
+        "key": "shift+alt+s",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "sniphive.insertSnippet",
+        "key": "shift+alt+i"
+      },
+      {
+        "command": "sniphive.showRecent",
+        "key": "ctrl+shift+e"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sniphive",
+          "title": "SnipHive",
+          "icon": "resources/sniphive-sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "sniphive": [
+        {
+          "id": "sniphiveSidebarWebview",
+          "name": "SnipHive",
+          "type": "webview",
+          "when": "!sniphive.authenticated || !sniphive.unlocked"
+        },
+        {
+          "id": "sniphiveSnippets",
+          "name": "Snippets",
+          "type": "tree",
+          "when": "sniphive.authenticated && sniphive.unlocked"
+        },
+        {
+          "id": "sniphiveNotes",
+          "name": "Notes",
+          "type": "tree",
+          "when": "sniphive.authenticated && sniphive.unlocked"
+        },
+        {
+          "id": "sniphiveFavorites",
+          "name": "Favorites",
+          "type": "tree",
+          "when": "sniphive.authenticated && sniphive.unlocked"
+        },
+        {
+          "id": "sniphivePinned",
+          "name": "Pinned",
+          "type": "tree",
+          "when": "sniphive.authenticated && sniphive.unlocked"
+        },
+        {
+          "id": "sniphiveArchive",
+          "name": "Archive",
+          "type": "tree",
+          "when": "sniphive.authenticated && sniphive.unlocked"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "webpack --mode production",
+    "compile": "webpack --mode development",
+    "watch": "webpack --mode development --watch",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "~1.85.0",
+    "@vscode/test-electron": "^2.3.8",
+    "mocha": "^10.3.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.4",
+    "@vscode/vsce": "^2.22.0",
+    "@types/mocha": "^10.0.6",
+    "assert": "^2.1.0"
+  }
+}
