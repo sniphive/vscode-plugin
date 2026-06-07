@@ -74,7 +74,11 @@ export class SnipHiveApiClient {
         queryParams?: Record<string, string>,
         workspaceId?: string
     ): Promise<ApiResponse<T>> {
-        const url = this.buildUrl(apiUrl, endpoint, queryParams);
+        const params: Record<string, string> = { ...queryParams };
+        if (workspaceId) {
+            params.workspace_id = workspaceId;
+        }
+        const url = this.buildUrl(apiUrl, endpoint, params);
         outputChannel.appendLine(`GET ${url}`);
         try {
             const res = await this.fetchWithTimeout(url, {
@@ -105,6 +109,9 @@ export class SnipHiveApiClient {
                 page: page.toString(),
                 per_page: '50',
             };
+            if (workspaceId) {
+                params.workspace_id = workspaceId;
+            }
 
             const url = this.buildUrl(apiUrl, endpoint, params);
             outputChannel.appendLine(`GET (paginated) ${url}`);
@@ -119,11 +126,26 @@ export class SnipHiveApiClient {
                     break;
                 }
                 const parsed = JSON.parse(rawBody);
-                if (parsed.data && Array.isArray(parsed.data)) {
-                    for (const item of parsed.data) {
+                
+                let dataArray = null;
+                if (Array.isArray(parsed)) {
+                    dataArray = parsed;
+                } else if (parsed.data && Array.isArray(parsed.data)) {
+                    dataArray = parsed.data;
+                } else if (parsed.data && parsed.data.data && Array.isArray(parsed.data.data)) {
+                    dataArray = parsed.data.data;
+                } else if (parsed.success && parsed.data && Array.isArray(parsed.data)) {
+                    dataArray = parsed.data;
+                }
+
+                if (dataArray) {
+                    for (const item of dataArray) {
                         allItems.push(item as T);
                     }
+                } else {
+                    outputChannel.appendLine(`Paginated fetch array extraction failed: ${rawBody}`);
                 }
+
                 if (parsed.meta && parsed.meta.last_page) {
                     lastPage = parsed.meta.last_page;
                 } else {

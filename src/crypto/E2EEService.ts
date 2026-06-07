@@ -238,24 +238,39 @@ export class E2EEService {
     async encryptContent(plaintext: string): Promise<{ encryptedContent: string; encryptedDEK: string; iv: string; contentIv: string } | null> {
         try {
             const privateKey = await this.getPrivateKey();
-            if (!privateKey) return null;
+            if (!privateKey) {
+                return null;
+            }
 
             if (!this.publicKey) {
                 const api = SnipHiveApiService.getInstance();
                 const status = await api.getSecurityStatus();
-                if (!status || !status.e2ee_profile) return null;
+                if (!status || !status.e2ee_profile) {
+                    return null;
+                }
 
-                const publicKeyJwk = JSON.parse(status.e2ee_profile.public_key_jwk);
-                this.publicKey = await RSA.importPublicKeyFromJWK(publicKeyJwk);
+                try {
+                    const jwkRaw = status.e2ee_profile.public_key_jwk;
+                    const publicKeyJwk = typeof jwkRaw === 'string' ? JSON.parse(jwkRaw) : jwkRaw;
+                    this.publicKey = await RSA.importPublicKeyFromJWK(publicKeyJwk);
+                } catch (e: any) {
+                    outputChannel.appendLine(`Public Key parse/import hatası: ${e.message}`);
+                    return null;
+                }
             }
 
-            const result = await Envelope.sealEnvelope(plaintext, this.publicKey!);
-            return {
-                encryptedContent: result.encryptedContent,
-                encryptedDEK: result.encryptedDEK,
-                iv: '',
-                contentIv: '',
-            };
+            try {
+                const result = await Envelope.sealEnvelope(plaintext, this.publicKey!);
+                return {
+                    encryptedContent: result.encryptedContent,
+                    encryptedDEK: result.encryptedDEK,
+                    iv: '',
+                    contentIv: '',
+                };
+            } catch (e: any) {
+                outputChannel.appendLine(`sealEnvelope hatası: ${e.message}`);
+                return null;
+            }
         } catch (e: any) {
             outputChannel.appendLine(`Encrypt error: ${e.message}`);
             return null;

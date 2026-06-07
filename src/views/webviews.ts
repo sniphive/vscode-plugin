@@ -29,6 +29,20 @@ async function prepareContentForCreate(
         return null;
     }
 
+    // E2EE kuruluysa, private key'in belleğe yüklendiğinden emin ol.
+    // Eğer kilitliyse önce auto-unlock'u dene (kayıtlı master password varsa).
+    if (!e2ee.isUnlocked()) {
+        outputChannel.appendLine('[prepareContentForCreate] E2EE kilitli, auto-unlock deneniyor...');
+        const autoUnlocked = await e2ee.tryAutoUnlock();
+        if (!autoUnlocked) {
+            outputChannel.appendLine('[prepareContentForCreate] Auto-unlock başarısız, unlock paneli açılıyor.');
+            panel.webview.postMessage({ cmd: 'error', message: 'E2EE kilitli. Lütfen master şifrenizi girerek kilidi açın.' });
+            vscode.commands.executeCommand('sniphive.showUnlock');
+            return null;
+        }
+        outputChannel.appendLine('[prepareContentForCreate] Auto-unlock başarılı.');
+    }
+
     const enc = await e2ee.encryptContent(content);
     if (!enc) {
         panel.webview.postMessage({ cmd: 'error', message: 'Encryption failed. Ensure E2EE is set up and unlocked.' });
