@@ -2,7 +2,7 @@
   "name": "sniphive",
   "displayName": "SnipHive",
   "description": "Securely manage and access your code snippets with end-to-end encryption",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "icon": "logo.png",
   "publisher": "sniphive",
   "license": "SEE LICENSE IN LICENSE.md",

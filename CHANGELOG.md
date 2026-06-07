@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- Added copy public link functionality for snippets and notes
+- Fixed E2EE encryption and synchronization issues for public items
+- Refactored internal commands and added BaseCacheService
+- Resolved code review items (P1-P3)
+- Updated extension logo and sidebar icon sizing
+
 ## 0.1.0
 
 - Initial release
