@@ -288,6 +288,18 @@ export class E2EEService {
         }
     }
 
+    async decryptDEK(encryptedDEK: string): Promise<string | null> {
+        try {
+            const privateKey = await this.getPrivateKey();
+            if (!privateKey) return null;
+            return await Envelope.decryptDEK(encryptedDEK, privateKey);
+        } catch (e: any) {
+            outputChannel.appendLine(`Decrypt DEK error: ${e.message}`);
+            return null;
+        }
+    }
+
+
     isUnlocked(): boolean {
         return this.privateKey !== null;
     }

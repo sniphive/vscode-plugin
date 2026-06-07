@@ -77,7 +77,7 @@ export class SnippetsTreeProvider implements vscode.TreeDataProvider<SnipHiveTre
     }
 
     private toTreeItem(snippet: Snippet): SnipHiveTreeItem {
-        const item = new SnipHiveTreeItem(snippet.title, snippet.id, snippet.slug, 'snippet');
+        const item = new SnipHiveTreeItem(snippet.title, snippet.id, snippet.slug, 'snippet', snippet.is_public);
         item.setIcon(isEncrypted(snippet), snippet.is_favorite, snippet.is_pinned);
         item.setLanguageDetail(snippet.language, isEncrypted(snippet), snippet.updated_at);
         item.setTooltip(snippet.title, snippet.content, snippet.language, snippet.tags.map(t => t.name), isEncrypted(snippet));

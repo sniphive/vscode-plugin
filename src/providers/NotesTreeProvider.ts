@@ -63,7 +63,7 @@ export class NotesTreeProvider implements vscode.TreeDataProvider<SnipHiveTreeIt
     }
 
     private toTreeItem(note: Note): SnipHiveTreeItem {
-        const item = new SnipHiveTreeItem(note.title, note.id, note.slug, 'note');
+        const item = new SnipHiveTreeItem(note.title, note.id, note.slug, 'note', note.is_public);
         item.setIcon(isEncrypted(note), note.is_favorite, note.is_pinned);
         item.setLanguageDetail(null, isEncrypted(note), note.updated_at);
         item.setTooltip(note.title, note.content, null, note.tags.map(t => t.name), isEncrypted(note));

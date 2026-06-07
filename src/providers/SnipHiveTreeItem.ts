@@ -12,13 +12,15 @@ export class SnipHiveTreeItem extends vscode.TreeItem {
         id: number,
         slug: string,
         itemType: ItemType,
+        isPublic: boolean = false,
         collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
     ) {
         super(label, collapsibleState);
         this.itemId = id;
         this.slug = slug;
         this.itemType = itemType;
-        this.contextValue = itemType === 'snippet' ? 'sniphiveSnippetItem' : 'sniphiveNoteItem';
+        const baseContext = itemType === 'snippet' ? 'sniphiveSnippetItem' : 'sniphiveNoteItem';
+        this.contextValue = isPublic ? `${baseContext}Public` : baseContext;
     }
 
     setIcon(isEncrypted: boolean, isFavorite: boolean, isPinned: boolean) {

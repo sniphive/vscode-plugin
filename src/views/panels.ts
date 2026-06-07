@@ -52,6 +52,7 @@ async function renderSnippetDetail(context: vscode.ExtensionContext, panel: vsco
 <div class="actions">
     <button id="btn-edit">Edit</button>
     <button id="btn-copy">Copy</button>
+    ${snippet.is_public ? '<button id="btn-copypublic">Copy Public Link</button>' : ''}
     <button id="btn-pin">${snippet.is_pinned ? 'Unpin' : 'Pin'}</button>
     <button id="btn-fav">${snippet.is_favorite ? 'Unfavorite' : 'Favorite'}</button>
     <button class="secondary" id="btn-archive">Archive</button>
@@ -81,6 +82,18 @@ async function renderSnippetDetail(context: vscode.ExtensionContext, panel: vsco
             });
         });
         
+        const btnCopyPublic = document.getElementById('btn-copypublic');
+        if (btnCopyPublic) {
+            btnCopyPublic.addEventListener('click', () => {
+                vscode.postMessage({
+                    cmd: 'copyPublicLink',
+                    slug: snippetSlug,
+                    publicUrl: ${JSON.stringify(snippet.public_url)},
+                    encryptedDek: ${JSON.stringify(snippet.encrypted_dek)}
+                });
+            });
+        }
+        
         document.getElementById('btn-pin').addEventListener('click', () => {
             vscode.postMessage({ cmd: 'togglePin', slug: snippetSlug });
         });
@@ -107,6 +120,18 @@ async function renderSnippetDetail(context: vscode.ExtensionContext, panel: vsco
                 await vscode.env.clipboard.writeText(msg.content);
                 vscode.window.showInformationMessage('Copied to clipboard');
                 break;
+            case 'copyPublicLink': {
+                let url = msg.publicUrl || `https://sniphive.net/p/s/${msg.slug}`;
+                if (msg.encryptedDek) {
+                    const dek = await E2EEService.getInstance().decryptDEK(msg.encryptedDek);
+                    if (dek) {
+                        url += `#${dek}`;
+                    }
+                }
+                await vscode.env.clipboard.writeText(url);
+                vscode.window.showInformationMessage('Public link copied to clipboard');
+                break;
+            }
             case 'togglePin': {
                 const updated = await api.toggleSnippetPin(msg.slug);
                 if (updated) { snippetCache.updateSnippet(updated); panel.dispose(); }
@@ -162,6 +187,7 @@ async function renderNoteDetail(context: vscode.ExtensionContext, panel: vscode.
 <div class="actions">
     <button id="btn-edit">Edit</button>
     <button id="btn-copy">Copy</button>
+    ${note.is_public ? '<button id="btn-copypublic">Copy Public Link</button>' : ''}
     <button id="btn-pin">${note.is_pinned ? 'Unpin' : 'Pin'}</button>
     <button id="btn-fav">${note.is_favorite ? 'Unfavorite' : 'Favorite'}</button>
     <button class="secondary" id="btn-archive">Archive</button>
@@ -179,7 +205,8 @@ async function renderNoteDetail(context: vscode.ExtensionContext, panel: vscode.
                 id: noteId,
                 slug: noteSlug,
                 title: ${JSON.stringify(note.title)},
-                content: ${JSON.stringify(content)}
+                content: ${JSON.stringify(content)},
+                is_public: ${note.is_public ? 'true' : 'false'}
             });
         });
         
@@ -189,6 +216,18 @@ async function renderNoteDetail(context: vscode.ExtensionContext, panel: vscode.
                 content: ${JSON.stringify(content)}
             });
         });
+        
+        const btnCopyPublic = document.getElementById('btn-copypublic');
+        if (btnCopyPublic) {
+            btnCopyPublic.addEventListener('click', () => {
+                vscode.postMessage({
+                    cmd: 'copyPublicLink',
+                    slug: noteSlug,
+                    publicUrl: ${JSON.stringify(note.public_url)},
+                    encryptedDek: ${JSON.stringify(note.encrypted_dek)}
+                });
+            });
+        }
         
         document.getElementById('btn-pin').addEventListener('click', () => {
             vscode.postMessage({ cmd: 'togglePin', slug: noteSlug });
@@ -219,6 +258,18 @@ async function renderNoteDetail(context: vscode.ExtensionContext, panel: vscode.
                 await vscode.env.clipboard.writeText(msg.content);
                 vscode.window.showInformationMessage('Copied to clipboard');
                 break;
+            case 'copyPublicLink': {
+                let url = msg.publicUrl || `https://sniphive.net/p/n/${msg.slug}`;
+                if (msg.encryptedDek) {
+                    const dek = await E2EEService.getInstance().decryptDEK(msg.encryptedDek);
+                    if (dek) {
+                        url += `#${dek}`;
+                    }
+                }
+                await vscode.env.clipboard.writeText(url);
+                vscode.window.showInformationMessage('Public link copied to clipboard');
+                break;
+            }
             case 'togglePin': {
                 const updated = await api.toggleNotePin(msg.slug);
                 if (updated) { noteCache.updateNote(updated); panel.dispose(); }

@@ -11,7 +11,8 @@ async function prepareContentForCreate(
     api: SnipHiveApiService,
     e2ee: E2EEService,
     panel: vscode.WebviewPanel,
-    content: string
+    content: string,
+    isPublic: boolean = false
 ): Promise<{ content: string; encryptedDek?: string } | null> {
     const status = await api.getSecurityStatus();
     if (!status) {
@@ -179,6 +180,7 @@ export async function showCreateSnippetPanel(context: vscode.ExtensionContext, p
 <div class="form-group"><label for="title">Title *</label><input type="text" id="title" placeholder="Snippet title"></div>
 <div class="form-group"><label for="content">Content *</label><textarea id="content" placeholder="Paste your code here">${sanitizeHtml(prefill?.content || '')}</textarea></div>
 <div class="form-group"><label for="language">Language</label><select id="language"><option value="">None</option>${langOptions}</select></div>
+<div class="form-group"><label for="visibility">Visibility</label><select id="visibility"><option value="private">Private</option><option value="public">Public</option></select></div>
 <div class="error" id="error"></div>
 <div class="actions">
     <button id="btn-create">Create</button>
@@ -191,9 +193,10 @@ export async function showCreateSnippetPanel(context: vscode.ExtensionContext, p
             const title = document.getElementById('title').value.trim();
             const content = document.getElementById('content').value;
             const language = document.getElementById('language').value;
+            const isPublic = document.getElementById('visibility').value === 'public';
             if (!title) { showError('Title is required'); return; }
             if (!content) { showError('Content is required'); return; }
-            vscode.postMessage({ cmd: 'create', title, content, language });
+            vscode.postMessage({ cmd: 'create', title, content, language, isPublic });
         }
         function cancel() { vscode.postMessage({ cmd: 'cancel' }); }
         function showError(m) { const e=document.getElementById('error'); e.textContent=m; e.classList.add('visible'); }
@@ -208,10 +211,10 @@ export async function showCreateSnippetPanel(context: vscode.ExtensionContext, p
         if (msg.cmd === 'create') {
             const api = SnipHiveApiService.getInstance();
             const e2ee = E2EEService.getInstance();
-            const prepared = await prepareContentForCreate(api, e2ee, panel, msg.content);
+            const prepared = await prepareContentForCreate(api, e2ee, panel, msg.content, msg.isPublic);
             if (!prepared) return;
 
-            const snippet = await api.createSnippet(msg.title, prepared.content, msg.language || '', [], prepared.encryptedDek);
+            const snippet = await api.createSnippet(msg.title, prepared.content, msg.language || '', [], prepared.encryptedDek, msg.isPublic);
             if (snippet) {
                 SnippetCacheService.getInstance().updateSnippet(snippet);
                 panel.dispose();
@@ -229,6 +232,7 @@ export function showCreateNotePanel(context: vscode.ExtensionContext, prefill?: 
 <h1>Create Note</h1>
 <div class="form-group"><label for="title">Title *</label><input type="text" id="title" placeholder="Note title"></div>
 <div class="form-group"><label for="content">Content *</label><textarea id="content" placeholder="Write your note here" style="min-height: 200px;">${sanitizeHtml(prefill?.content || '')}</textarea></div>
+<div class="form-group"><label for="visibility">Visibility</label><select id="visibility"><option value="private">Private</option><option value="public">Public</option></select></div>
 <div class="error" id="error"></div>
 <div class="actions">
     <button id="btn-create">Create</button>
@@ -240,9 +244,10 @@ export function showCreateNotePanel(context: vscode.ExtensionContext, prefill?: 
         function create() {
             const title = document.getElementById('title').value.trim();
             const content = document.getElementById('content').value;
+            const isPublic = document.getElementById('visibility').value === 'public';
             if (!title) { showError('Title is required'); return; }
             if (!content) { showError('Content is required'); return; }
-            vscode.postMessage({ cmd: 'create', title, content });
+            vscode.postMessage({ cmd: 'create', title, content, isPublic });
         }
         function cancel() { vscode.postMessage({ cmd: 'cancel' }); }
         function showError(m) { const e=document.getElementById('error'); e.textContent=m; e.classList.add('visible'); }
@@ -257,10 +262,10 @@ export function showCreateNotePanel(context: vscode.ExtensionContext, prefill?: 
         if (msg.cmd === 'create') {
             const api = SnipHiveApiService.getInstance();
             const e2ee = E2EEService.getInstance();
-            const prepared = await prepareContentForCreate(api, e2ee, panel, msg.content);
+            const prepared = await prepareContentForCreate(api, e2ee, panel, msg.content, msg.isPublic);
             if (!prepared) return;
 
-            const note = await api.createNote(msg.title, prepared.content, [], prepared.encryptedDek);
+            const note = await api.createNote(msg.title, prepared.content, [], prepared.encryptedDek, msg.isPublic);
             if (note) {
                 NoteCacheService.getInstance().updateNote(note);
                 panel.dispose();
@@ -271,13 +276,14 @@ export function showCreateNotePanel(context: vscode.ExtensionContext, prefill?: 
     });
 }
 
-export function showEditNotePanel(context: vscode.ExtensionContext, note: { id: number; slug: string; title: string; content: string }) {
+export function showEditNotePanel(context: vscode.ExtensionContext, note: { id: number; slug: string; title: string; content: string; is_public: boolean }) {
     const panel = vscode.window.createWebviewPanel('sniphiveEditNote', 'Edit Note', vscode.ViewColumn.One, { enableScripts: true });
 
     const body = `
 <h1>Edit Note</h1>
 <div class="form-group"><label for="title">Title *</label><input type="text" id="title" value="\${sanitizeHtml(note.title)}"></div>
 <div class="form-group"><label for="content">Content *</label><textarea id="content" style="min-height: 200px;">\${sanitizeHtml(note.content)}</textarea></div>
+<div class="form-group"><label for="visibility">Visibility</label><select id="visibility"><option value="private" \${!note.is_public ? 'selected' : ''}>Private</option><option value="public" \${note.is_public ? 'selected' : ''}>Public</option></select></div>
 <div class="error" id="error"></div>
 <div class="actions">
     <button id="btn-save">Save</button>
@@ -289,9 +295,10 @@ export function showEditNotePanel(context: vscode.ExtensionContext, note: { id: 
         function save() {
             const title = document.getElementById('title').value.trim();
             const content = document.getElementById('content').value;
+            const isPublic = document.getElementById('visibility').value === 'public';
             if (!title) { showError('Title is required'); return; }
             if (!content) { showError('Content is required'); return; }
-            vscode.postMessage({ cmd: 'save', title, content });
+            vscode.postMessage({ cmd: 'save', title, content, isPublic });
         }
         function cancel() { vscode.postMessage({ cmd: 'cancel' }); }
         function showError(m) { const e=document.getElementById('error'); e.textContent=m; e.classList.add('visible'); }
@@ -306,10 +313,10 @@ export function showEditNotePanel(context: vscode.ExtensionContext, note: { id: 
         if (msg.cmd === 'save') {
             const api = SnipHiveApiService.getInstance();
             const e2ee = E2EEService.getInstance();
-            const prepared = await prepareContentForCreate(api, e2ee, panel, msg.content);
+            const prepared = await prepareContentForCreate(api, e2ee, panel, msg.content, msg.isPublic);
             if (!prepared) return;
 
-            const fields: any = { title: msg.title, content: prepared.content };
+            const fields: any = { title: msg.title, content: prepared.content, is_public: msg.isPublic };
             if (prepared.encryptedDek) {
                 fields.encrypted_dek = prepared.encryptedDek;
             }

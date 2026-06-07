@@ -20,7 +20,7 @@ export function registerNoteCommands(context: vscode.ExtensionContext): vscode.D
     })));
 
     subscriptions.push(vscode.commands.registerCommand('sniphive.editNote', wrapCommand(async (msg: any) => {
-        showEditNotePanel(context, { id: msg.id, slug: msg.slug, title: msg.title, content: msg.content });
+        showEditNotePanel(context, { id: msg.id, slug: msg.slug, title: msg.title, content: msg.content, is_public: msg.is_public });
     })));
 
     return subscriptions;

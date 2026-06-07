@@ -113,6 +113,12 @@
         "title": "Switch Workspace",
         "category": "SnipHive",
         "icon": "$(project)"
+      },
+      {
+        "command": "sniphive.copyPublicLink",
+        "title": "Copy Public Link",
+        "category": "SnipHive",
+        "icon": "$(link)"
       }
     ],
     "keybindings": [
@@ -149,12 +155,17 @@
       "view/item/context": [
         {
           "command": "sniphive.insertSnippet",
-          "when": "viewItem == sniphiveSnippetItem",
+          "when": "viewItem =~ /sniphiveSnippetItem/",
           "group": "inline@1"
         },
         {
+          "command": "sniphive.copyPublicLink",
+          "when": "viewItem =~ /Public$/",
+          "group": "inline@2"
+        },
+        {
           "command": "sniphive.createSnippet",
-          "when": "viewItem == sniphiveSnippetItem",
+          "when": "viewItem =~ /sniphiveSnippetItem/",
           "group": "navigation@1"
         },
         {

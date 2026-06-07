@@ -49,12 +49,13 @@ export class SnipHiveApiService {
         return res.success ? (res.data || null) : null;
     }
 
-    async createSnippet(title: string, content: string, language: string, tags: string[] = [], encryptedDek?: string): Promise<Snippet | null> {
+    async createSnippet(title: string, content: string, language: string, tags: string[] = [], encryptedDek?: string, isPublic?: boolean): Promise<Snippet | null> {
         const auth = await this.getAuth();
         if (!auth) return null;
         const body: any = { title, content, language, tags };
         if (auth.workspaceId) body.workspace_id = auth.workspaceId;
         if (encryptedDek) body.encrypted_dek = encryptedDek;
+        if (isPublic !== undefined) body.is_public = isPublic;
         const res = await this.client.post<Snippet>(auth.apiUrl, '/api/v1/snippets', auth.token, body, auth.workspaceId || undefined);
         return res.success ? (res.data || null) : null;
     }
@@ -115,12 +116,13 @@ export class SnipHiveApiService {
         return res.success ? (res.data || null) : null;
     }
 
-    async createNote(title: string, content: string, tags: string[] = [], encryptedDek?: string): Promise<Note | null> {
+    async createNote(title: string, content: string, tags: string[] = [], encryptedDek?: string, isPublic?: boolean): Promise<Note | null> {
         const auth = await this.getAuth();
         if (!auth) return null;
         const body: any = { title, content, tags };
         if (auth.workspaceId) body.workspace_id = auth.workspaceId;
         if (encryptedDek) body.encrypted_dek = encryptedDek;
+        if (isPublic !== undefined) body.is_public = isPublic;
         const res = await this.client.post<Note>(auth.apiUrl, '/api/v1/notes', auth.token, body, auth.workspaceId || undefined);
         return res.success ? (res.data || null) : null;
     }

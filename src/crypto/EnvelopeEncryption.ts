@@ -75,3 +75,16 @@ export async function openEnvelope(
 
     return new TextDecoder().decode(decrypted);
 }
+
+export async function decryptDEK(
+    encryptedDEK: string,
+    privateKey: CryptoKey
+): Promise<string> {
+    const encryptedDEKBuffer = RSA.base64ToArrayBuffer(encryptedDEK);
+    const rawDEK = await crypto.subtle.decrypt(
+        { name: 'RSA-OAEP' },
+        privateKey,
+        encryptedDEKBuffer
+    );
+    return RSA.arrayBufferToBase64(rawDEK);
+}
