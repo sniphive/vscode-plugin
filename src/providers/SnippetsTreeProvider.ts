@@ -44,11 +44,12 @@ export class SnippetsTreeProvider implements vscode.TreeDataProvider<SnipHiveTre
 
         if (this.searchQuery) {
             const q = this.searchQuery.toLowerCase();
-            snippets = snippets.filter(s =>
-                s.title.toLowerCase().includes(q) ||
-                s.content.toLowerCase().includes(q) ||
-                s.tags.some(t => t.name.toLowerCase().includes(q))
-            );
+            snippets = snippets.filter(s => {
+                const matchTitle = s.title.toLowerCase().includes(q);
+                const matchTag = s.tags.some(t => t.name.toLowerCase().includes(q));
+                const matchContent = !isEncrypted(s) && s.content.toLowerCase().includes(q);
+                return matchTitle || matchTag || matchContent;
+            });
         }
 
         if (this.languageFilter) {
@@ -79,7 +80,7 @@ export class SnippetsTreeProvider implements vscode.TreeDataProvider<SnipHiveTre
         const item = new SnipHiveTreeItem(snippet.title, snippet.id, snippet.slug, 'snippet');
         item.setIcon(isEncrypted(snippet), snippet.is_favorite, snippet.is_pinned);
         item.setLanguageDetail(snippet.language, isEncrypted(snippet), snippet.updated_at);
-        item.setTooltip(snippet.title, snippet.content, snippet.language, snippet.tags.map(t => t.name));
+        item.setTooltip(snippet.title, snippet.content, snippet.language, snippet.tags.map(t => t.name), isEncrypted(snippet));
         item.command = {
             command: 'sniphive.openSnippetDetail',
             title: 'Open Snippet',

@@ -13,18 +13,23 @@ import { SidebarWebviewProvider } from './views/SidebarWebviewProvider';
 
 const outputChannel = vscode.window.createOutputChannel('SnipHive');
 
+let sidebarManager: SidebarManager | undefined;
+let e2eeService: E2EEService | undefined;
+let snippetCache: SnippetCacheService | undefined;
+let noteCache: NoteCacheService | undefined;
+
 export function activate(context: vscode.ExtensionContext) {
     outputChannel.appendLine('SnipHive extension activating...');
 
     const authService = SnipHiveAuthService.getInstance(context);
     const apiService = SnipHiveApiService.getInstance();
-    const snippetCache = SnippetCacheService.getInstance();
-    const noteCache = NoteCacheService.getInstance();
-    const e2eeService = E2EEService.getInstance(context);
+    snippetCache = SnippetCacheService.getInstance();
+    noteCache = NoteCacheService.getInstance();
+    e2eeService = E2EEService.getInstance(context);
 
     const statusBar = new StatusBarManager(context);
 
-    const sidebarManager = new SidebarManager(
+    sidebarManager = new SidebarManager(
         context,
         authService,
         apiService,
@@ -48,12 +53,11 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.registerTreeDataProvider('sniphiveFavorites', sidebarManager.favoritesProvider),
         vscode.window.registerTreeDataProvider('sniphivePinned', sidebarManager.pinnedProvider),
         vscode.window.registerTreeDataProvider('sniphiveArchive', sidebarManager.archiveProvider),
-        vscode.languages.registerCompletionItemProvider({ pattern: '**' }, new SnippetCompletionProvider())
+        vscode.languages.registerCompletionItemProvider({ pattern: '**' }, new SnippetCompletionProvider()),
+        onSettingsChange(() => {
+            if (sidebarManager) sidebarManager.onSettingsChanged();
+        })
     );
-
-    onSettingsChange(() => {
-        sidebarManager.onSettingsChanged();
-    });
 
     handleStartup(context, authService, apiService, e2eeService, statusBar, sidebarManager, snippetCache, noteCache);
 
@@ -133,6 +137,10 @@ async function handleStartup(
 
 export function deactivate() {
     outputChannel.appendLine('SnipHive extension deactivated.');
+    if (sidebarManager) sidebarManager.dispose();
+    if (e2eeService) e2eeService.clearPrivateKey();
+    if (snippetCache) snippetCache.stopAutoRefresh();
+    if (noteCache) noteCache.stopAutoRefresh();
 }
 
 export { outputChannel };

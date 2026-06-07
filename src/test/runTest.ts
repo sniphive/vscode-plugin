@@ -1,23 +1,15 @@
-import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
+import { runTests } from '@vscode/test-electron';
 
 async function main() {
     try {
         const extensionDevelopmentPath = path.resolve(__dirname, '../../');
-        const extensionTestsPath = path.resolve(__dirname, './');
+        const extensionTestsPath = path.resolve(__dirname, './index');
 
-        const workspacePath = path.resolve(extensionDevelopmentPath, '..', 'test-fixtures');
-
-        if (!fs.existsSync(workspacePath)) {
-            fs.mkdirSync(workspacePath, { recursive: true });
-        }
-
-        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-
-        // Discover and run all test files
-        const { runTests } = require('./runTestsInDir');
-        await runTests(extensionTestsPath);
+        await runTests({
+            extensionDevelopmentPath,
+            extensionTestsPath,
+        });
 
         console.log('All tests passed!');
     } catch (err) {

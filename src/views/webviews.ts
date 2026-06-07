@@ -3,9 +3,46 @@ import { SnipHiveApiService } from '../services/SnipHiveApiService';
 import { E2EEService } from '../crypto/E2EEService';
 import { SnippetCacheService } from '../services/SnippetCacheService';
 import { NoteCacheService } from '../services/NoteCacheService';
-import { getSupportedLanguages } from '../config/settings';
-import { getWebviewHtml } from './WebviewHelper';
+import { getSupportedLanguagesAsync } from '../utils/languages';
+import { getWebviewHtml, sanitizeHtml } from './WebviewHelper';
 import { outputChannel } from '../extension';
+
+async function prepareContentForCreate(
+    api: SnipHiveApiService,
+    e2ee: E2EEService,
+    panel: vscode.WebviewPanel,
+    content: string
+): Promise<{ content: string; encryptedDek?: string } | null> {
+    const status = await api.getSecurityStatus();
+    if (!status) {
+        panel.webview.postMessage({ cmd: 'error', message: 'Unable to verify E2EE status. Please try again.' });
+        return null;
+    }
+
+    if (!status.setup_complete) {
+        return { content };
+    }
+
+    if (!status.e2ee_profile) {
+        panel.webview.postMessage({ cmd: 'error', message: 'E2EE setup is incomplete. Please run Setup E2EE again.' });
+        vscode.commands.executeCommand('sniphive.setupE2EE');
+        return null;
+    }
+
+    const enc = await e2ee.encryptContent(content);
+    if (!enc) {
+        panel.webview.postMessage({ cmd: 'error', message: 'Encryption failed. Ensure E2EE is set up and unlocked.' });
+        if (!e2ee.isUnlocked()) {
+            vscode.commands.executeCommand('sniphive.showUnlock');
+        }
+        return null;
+    }
+
+    return {
+        content: enc.encryptedContent,
+        encryptedDek: enc.encryptedDEK,
+    };
+}
 
 export function showLoginPanel(context: vscode.ExtensionContext) {
     const panel = vscode.window.createWebviewPanel('sniphiveLogin', 'SnipHive Login', vscode.ViewColumn.One, { enableScripts: true });
@@ -118,21 +155,20 @@ export function showUnlockPanel(context: vscode.ExtensionContext) {
     });
 }
 
-export function showCreateSnippetPanel(context: vscode.ExtensionContext, prefill?: { content?: string; language?: string }) {
+export async function showCreateSnippetPanel(context: vscode.ExtensionContext, prefill?: { content?: string; language?: string }) {
     const panel = vscode.window.createWebviewPanel('sniphiveCreateSnippet', 'Create Snippet', vscode.ViewColumn.One, { enableScripts: true });
-    const languages = getSupportedLanguages();
+    const languages = await getSupportedLanguagesAsync();
     const langOptions = languages.map(l => `<option value="${l}" ${prefill?.language === l ? 'selected' : ''}>${l}</option>`).join('');
 
     const body = `
 <h1>Create Snippet</h1>
 <div class="form-group"><label for="title">Title *</label><input type="text" id="title" placeholder="Snippet title"></div>
-<div class="form-group"><label for="content">Content *</label><textarea id="content" placeholder="Paste your code here">${(prefill?.content || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea></div>
+<div class="form-group"><label for="content">Content *</label><textarea id="content" placeholder="Paste your code here">${sanitizeHtml(prefill?.content || '')}</textarea></div>
 <div class="form-group"><label for="language">Language</label><select id="language"><option value="">None</option>${langOptions}</select></div>
-<div class="form-group"><label><input type="checkbox" id="encrypt"> Encrypt (E2EE)</label></div>
 <div class="error" id="error"></div>
 <div class="actions">
-    <button onclick="create()">Create</button>
-    <button class="secondary" onclick="cancel()">Cancel</button>
+    <button id="btn-create">Create</button>
+    <button class="secondary" id="btn-cancel">Cancel</button>
 </div>`;
 
     const script = `
@@ -141,13 +177,14 @@ export function showCreateSnippetPanel(context: vscode.ExtensionContext, prefill
             const title = document.getElementById('title').value.trim();
             const content = document.getElementById('content').value;
             const language = document.getElementById('language').value;
-            const encrypt = document.getElementById('encrypt').checked;
             if (!title) { showError('Title is required'); return; }
             if (!content) { showError('Content is required'); return; }
-            vscode.postMessage({ cmd: 'create', title, content, language, encrypt });
+            vscode.postMessage({ cmd: 'create', title, content, language });
         }
         function cancel() { vscode.postMessage({ cmd: 'cancel' }); }
         function showError(m) { const e=document.getElementById('error'); e.textContent=m; e.classList.add('visible'); }
+        document.getElementById('btn-create').addEventListener('click', create);
+        document.getElementById('btn-cancel').addEventListener('click', cancel);
         window.addEventListener('message', e => { if (e.data.cmd === 'error') showError(e.data.message); });`;
 
     panel.webview.html = getWebviewHtml(panel.webview, context.extensionUri, 'Create Snippet', body, script);
@@ -157,20 +194,119 @@ export function showCreateSnippetPanel(context: vscode.ExtensionContext, prefill
         if (msg.cmd === 'create') {
             const api = SnipHiveApiService.getInstance();
             const e2ee = E2EEService.getInstance();
-            let content = msg.content;
-            let encryptedDek: string | undefined;
-            if (msg.encrypt) {
-                const enc = await e2ee.encryptContent(content);
-                if (!enc) { panel.webview.postMessage({ cmd: 'error', message: 'Encryption failed' }); return; }
-                content = enc.encryptedContent;
-                encryptedDek = enc.encryptedDEK;
-            }
-            const snippet = await api.createSnippet(msg.title, content, msg.language || '', [], encryptedDek);
+            const prepared = await prepareContentForCreate(api, e2ee, panel, msg.content);
+            if (!prepared) return;
+
+            const snippet = await api.createSnippet(msg.title, prepared.content, msg.language || '', [], prepared.encryptedDek);
             if (snippet) {
                 SnippetCacheService.getInstance().updateSnippet(snippet);
                 panel.dispose();
             } else {
                 panel.webview.postMessage({ cmd: 'error', message: 'Failed to create snippet' });
+            }
+        }
+    });
+}
+
+export function showCreateNotePanel(context: vscode.ExtensionContext, prefill?: { content?: string }) {
+    const panel = vscode.window.createWebviewPanel('sniphiveCreateNote', 'Create Note', vscode.ViewColumn.One, { enableScripts: true });
+
+    const body = `
+<h1>Create Note</h1>
+<div class="form-group"><label for="title">Title *</label><input type="text" id="title" placeholder="Note title"></div>
+<div class="form-group"><label for="content">Content *</label><textarea id="content" placeholder="Write your note here" style="min-height: 200px;">${sanitizeHtml(prefill?.content || '')}</textarea></div>
+<div class="error" id="error"></div>
+<div class="actions">
+    <button id="btn-create">Create</button>
+    <button class="secondary" id="btn-cancel">Cancel</button>
+</div>`;
+
+    const script = `
+        const vscode = acquireVsCodeApi();
+        function create() {
+            const title = document.getElementById('title').value.trim();
+            const content = document.getElementById('content').value;
+            if (!title) { showError('Title is required'); return; }
+            if (!content) { showError('Content is required'); return; }
+            vscode.postMessage({ cmd: 'create', title, content });
+        }
+        function cancel() { vscode.postMessage({ cmd: 'cancel' }); }
+        function showError(m) { const e=document.getElementById('error'); e.textContent=m; e.classList.add('visible'); }
+        document.getElementById('btn-create').addEventListener('click', create);
+        document.getElementById('btn-cancel').addEventListener('click', cancel);
+        window.addEventListener('message', e => { if (e.data.cmd === 'error') showError(e.data.message); });`;
+
+    panel.webview.html = getWebviewHtml(panel.webview, context.extensionUri, 'Create Note', body, script);
+
+    panel.webview.onDidReceiveMessage(async (msg) => {
+        if (msg.cmd === 'cancel') { panel.dispose(); return; }
+        if (msg.cmd === 'create') {
+            const api = SnipHiveApiService.getInstance();
+            const e2ee = E2EEService.getInstance();
+            const prepared = await prepareContentForCreate(api, e2ee, panel, msg.content);
+            if (!prepared) return;
+
+            const note = await api.createNote(msg.title, prepared.content, [], prepared.encryptedDek);
+            if (note) {
+                NoteCacheService.getInstance().updateNote(note);
+                panel.dispose();
+            } else {
+                panel.webview.postMessage({ cmd: 'error', message: 'Failed to create note' });
+            }
+        }
+    });
+}
+
+export function showEditNotePanel(context: vscode.ExtensionContext, note: { id: number; slug: string; title: string; content: string }) {
+    const panel = vscode.window.createWebviewPanel('sniphiveEditNote', 'Edit Note', vscode.ViewColumn.One, { enableScripts: true });
+
+    const body = `
+<h1>Edit Note</h1>
+<div class="form-group"><label for="title">Title *</label><input type="text" id="title" value="\${sanitizeHtml(note.title)}"></div>
+<div class="form-group"><label for="content">Content *</label><textarea id="content" style="min-height: 200px;">\${sanitizeHtml(note.content)}</textarea></div>
+<div class="error" id="error"></div>
+<div class="actions">
+    <button id="btn-save">Save</button>
+    <button class="secondary" id="btn-cancel">Cancel</button>
+</div>`;
+
+    const script = `
+        const vscode = acquireVsCodeApi();
+        function save() {
+            const title = document.getElementById('title').value.trim();
+            const content = document.getElementById('content').value;
+            if (!title) { showError('Title is required'); return; }
+            if (!content) { showError('Content is required'); return; }
+            vscode.postMessage({ cmd: 'save', title, content });
+        }
+        function cancel() { vscode.postMessage({ cmd: 'cancel' }); }
+        function showError(m) { const e=document.getElementById('error'); e.textContent=m; e.classList.add('visible'); }
+        document.getElementById('btn-save').addEventListener('click', save);
+        document.getElementById('btn-cancel').addEventListener('click', cancel);
+        window.addEventListener('message', e => { if (e.data.cmd === 'error') showError(e.data.message); });`;
+
+    panel.webview.html = getWebviewHtml(panel.webview, context.extensionUri, 'Edit Note', body, script);
+
+    panel.webview.onDidReceiveMessage(async (msg) => {
+        if (msg.cmd === 'cancel') { panel.dispose(); return; }
+        if (msg.cmd === 'save') {
+            const api = SnipHiveApiService.getInstance();
+            const e2ee = E2EEService.getInstance();
+            const prepared = await prepareContentForCreate(api, e2ee, panel, msg.content);
+            if (!prepared) return;
+
+            const fields: any = { title: msg.title, content: prepared.content };
+            if (prepared.encryptedDek) {
+                fields.encrypted_dek = prepared.encryptedDek;
+            }
+
+            const updatedNote = await api.updateNote(note.slug, fields);
+            if (updatedNote) {
+                NoteCacheService.getInstance().updateNote(updatedNote);
+                vscode.window.showInformationMessage('Note updated successfully!');
+                panel.dispose();
+            } else {
+                panel.webview.postMessage({ cmd: 'error', message: 'Failed to update note' });
             }
         }
     });
@@ -201,7 +337,15 @@ export function showE2EESetupPanel(context: vscode.ExtensionContext) {
         }
         function cancel() { vscode.postMessage({ cmd: 'cancel' }); }
         function showError(m) { const e=document.getElementById('error'); e.textContent=m; e.classList.add('visible'); }
-        window.addEventListener('message', e => { if (e.data.cmd === 'error') showError(e.data.message); if (e.data.cmd === 'success') { alert('E2EE setup complete! Save your recovery codes.'); } });`;
+        window.addEventListener('message', e => { 
+            if (e.data.cmd === 'error') showError(e.data.message); 
+            if (e.data.cmd === 'success') { 
+                document.body.innerHTML = '<h1>E2EE Setup Complete</h1><p>Please save your recovery code securely. You will not be able to see it again:</p><div style="padding: 10px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-editorWidget-border); user-select: all; font-family: monospace; word-break: break-all; margin-bottom: 20px;">' + e.data.recoveryCodes.join('<br>') + '</div><button id="btn-done">Done</button>';
+                document.getElementById('btn-done').addEventListener('click', () => {
+                    vscode.postMessage({ cmd: 'done' });
+                });
+            } 
+        });`;
 
     panel.webview.html = getWebviewHtml(panel.webview, context.extensionUri, 'Setup E2EE', body, script);
 
@@ -212,11 +356,14 @@ export function showE2EESetupPanel(context: vscode.ExtensionContext) {
             const result = await e2ee.setupE2EE(msg.password);
             if (result.success) {
                 vscode.window.showInformationMessage('E2EE setup complete! Your data is now encrypted.');
-                panel.dispose();
-                vscode.commands.executeCommand('sniphive.afterUnlock');
+                panel.webview.postMessage({ cmd: 'success', recoveryCodes: result.recoveryCodes });
             } else {
                 panel.webview.postMessage({ cmd: 'error', message: result.message || 'Setup failed' });
             }
+        }
+        if (msg.cmd === 'done') {
+            panel.dispose();
+            vscode.commands.executeCommand('sniphive.afterUnlock');
         }
     });
 }

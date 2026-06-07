@@ -1,38 +1,44 @@
 const path = require('path');
 
 /** @type {import('webpack').Configuration} */
-module.exports = {
-  target: 'node',
-  entry: './src/extension.ts',
-  output: {
-    path: path.resolve(__dirname, 'dist'),
-    filename: 'extension.js',
-    libraryTarget: 'commonjs2',
-    devtoolModuleFilenameTemplate: '../[resource-path]'
-  },
-  devtool: 'source-map',
-  externals: {
-    vscode: 'commonjs vscode'
-  },
-  resolve: {
-    extensions: ['.ts', '.js']
-  },
-  module: {
-    rules: [
-      {
-        test: /\.ts$/,
-        exclude: /node_modules/,
-        use: [
-          {
-            loader: 'ts-loader',
-            options: {
-              compilerOptions: {
-                module: 'esnext'
+module.exports = (env, argv) => {
+  const isProduction = argv.mode === 'production';
+  return {
+    target: 'node',
+    entry: './src/extension.ts',
+    output: {
+      path: path.resolve(__dirname, 'dist'),
+      filename: 'extension.js',
+      libraryTarget: 'commonjs2',
+      devtoolModuleFilenameTemplate: '../[resource-path]'
+    },
+    devtool: isProduction ? false : 'source-map',
+    optimization: {
+      minimize: isProduction,
+    },
+    externals: {
+      vscode: 'commonjs vscode'
+    },
+    resolve: {
+      extensions: ['.ts', '.js']
+    },
+    module: {
+      rules: [
+        {
+          test: /\.ts$/,
+          exclude: /node_modules/,
+          use: [
+            {
+              loader: 'ts-loader',
+              options: {
+                compilerOptions: {
+                  module: 'esnext'
+                }
               }
             }
-          }
-        ]
-      }
-    ]
-  }
+          ]
+        }
+      ]
+    }
+  };
 };

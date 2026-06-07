@@ -2,43 +2,20 @@ import * as vscode from 'vscode';
 import { SnippetCacheService } from '../services/SnippetCacheService';
 import { E2EEService } from '../crypto/E2EEService';
 import { Snippet, isEncrypted } from '../models/Snippet';
+import { mapVscodeLanguage } from '../utils/languages';
 
 /**
  * Maps VS Code language IDs to SnipHive language names.
  */
-function mapVscodeLanguage(langId: string): string | null {
-    const map: Record<string, string> = {
-        'javascript': 'javascript',
-        'javascriptreact': 'javascript',
-        'typescript': 'typescript',
-        'typescriptreact': 'typescript',
-        'python': 'python',
-        'php': 'php',
-        'java': 'java',
-        'kotlin': 'kotlin',
-        'swift': 'swift',
-        'go': 'go',
-        'rust': 'rust',
-        'c': 'c',
-        'cpp': 'cpp',
-        'csharp': 'csharp',
-        'ruby': 'ruby',
-        'html': 'html',
-        'css': 'css',
-        'scss': 'scss',
-        'sql': 'sql',
-        'json': 'json',
-        'xml': 'xml',
-        'yaml': 'yaml',
-        'markdown': 'markdown',
-        'shellscript': 'bash',
-        'powershell': 'powershell',
-        'dockerfile': 'dockerfile',
-        'vue': 'vue',
-        'svelte': 'svelte',
-        'graphql': 'graphql',
-    };
-    return map[langId] || null;
+
+class SnipHiveCompletionItem extends vscode.CompletionItem {
+    snippet: Snippet;
+    langId: string;
+    constructor(snippet: Snippet, langId: string, label: string, kind: vscode.CompletionItemKind) {
+        super(label, kind);
+        this.snippet = snippet;
+        this.langId = langId;
+    }
 }
 
 export class SnippetCompletionProvider implements vscode.CompletionItemProvider {
@@ -86,47 +63,23 @@ export class SnippetCompletionProvider implements vscode.CompletionItemProvider 
                 return [];
             }
 
-            let content = snippet.content;
-
-            // Decrypt content if encrypted and E2EE is unlocked
-            if (isEncrypted(snippet)) {
-                if (!this.e2ee.isUnlocked()) {
-                    // Skip encrypted snippets if wallet/keys are locked
-                    continue;
-                }
-                try {
-                    const decrypted = await this.e2ee.decryptContent(
-                        snippet.content,
-                        snippet.encrypted_dek!,
-                        '',
-                        ''
-                    );
-                    if (decrypted) {
-                        content = decrypted;
-                    } else {
-                        continue;
-                    }
-                } catch {
-                    continue; // Skip if decryption fails
-                }
-            }
-
-            // Create CompletionItem
-            const item = new vscode.CompletionItem(snippet.title, vscode.CompletionItemKind.Snippet);
-            item.insertText = new vscode.SnippetString(content);
+            const item = new SnipHiveCompletionItem(snippet, currentLangId, snippet.title, vscode.CompletionItemKind.Snippet);
             item.detail = `SnipHive Snippet (${snippet.language || 'Plain Text'})`;
-            
-            // Add rich documentation preview
-            const previewLines = content.split('\n');
-            const preview = previewLines.slice(0, 7).join('\n') + (previewLines.length > 7 ? '\n...' : '');
-            
-            const doc = new vscode.MarkdownString();
-            doc.appendCodeblock(preview, currentLangId);
-            if (snippet.tags && snippet.tags.length > 0) {
-                doc.appendMarkdown(`\n\n*Tags: ${snippet.tags.map(t => `\`${t.name}\``).join(', ')}*`);
+
+            if (!isEncrypted(snippet)) {
+                item.insertText = new vscode.SnippetString(snippet.content);
+                const previewLines = snippet.content.split('\n');
+                const preview = previewLines.slice(0, 7).join('\n') + (previewLines.length > 7 ? '\n...' : '');
+                const doc = new vscode.MarkdownString();
+                doc.appendCodeblock(preview, currentLangId);
+                if (snippet.tags && snippet.tags.length > 0) {
+                    doc.appendMarkdown(`\n\n*Tags: ${snippet.tags.map(t => `\`${t.name}\``).join(', ')}*`);
+                }
+                item.documentation = doc;
+            } else {
+                item.detail += ' 🔒';
             }
-            item.documentation = doc;
-            
+
             // Filter and sort configurations
             item.filterText = snippet.title;
             
@@ -143,5 +96,36 @@ export class SnippetCompletionProvider implements vscode.CompletionItemProvider 
         }
 
         return completionItems;
+    }
+
+    async resolveCompletionItem(item: vscode.CompletionItem, token: vscode.CancellationToken): Promise<vscode.CompletionItem> {
+        if (item instanceof SnipHiveCompletionItem) {
+            const snippet = item.snippet;
+            if (isEncrypted(snippet)) {
+                let content = snippet.content;
+                if (this.e2ee.isUnlocked()) {
+                    try {
+                        const decrypted = await this.e2ee.decryptContent(snippet.content, snippet.encrypted_dek!, '', '');
+                        if (decrypted) content = decrypted;
+                        else content = '// Failed to decrypt snippet';
+                    } catch {
+                        content = '// Error decrypting snippet';
+                    }
+                } else {
+                    content = '// Snippet is encrypted. Please unlock SnipHive to view.';
+                }
+                
+                item.insertText = new vscode.SnippetString(content);
+                const previewLines = content.split('\n');
+                const preview = previewLines.slice(0, 7).join('\n') + (previewLines.length > 7 ? '\n...' : '');
+                const doc = new vscode.MarkdownString();
+                doc.appendCodeblock(preview, item.langId || snippet.language || 'plaintext');
+                if (snippet.tags && snippet.tags.length > 0) {
+                    doc.appendMarkdown(`\n\n*Tags: ${snippet.tags.map(t => `\`${t.name}\``).join(', ')}*`);
+                }
+                item.documentation = doc;
+            }
+        }
+        return item;
     }
 }

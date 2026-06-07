@@ -26,7 +26,7 @@ export class SnipHiveApiService {
         const auth = SnipHiveAuthService.getInstance();
         const token = await auth.getToken();
         if (!token) return null;
-        const wsId = (auth as any).context?.globalState?.get?.('sniphive.workspaceId') as string || '';
+        const wsId = auth.getWorkspaceId() || '';
         return { token, workspaceId: wsId, apiUrl: getApiUrl() };
     }
 

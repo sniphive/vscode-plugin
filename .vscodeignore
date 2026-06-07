@@ -17,3 +17,6 @@ graphify-out/**
 openspec/**
 dist/src_views_panels_ts.extension.js
 dist/src_views_panels_ts.extension.js.map
+out/**
+.agents/**
+.env*

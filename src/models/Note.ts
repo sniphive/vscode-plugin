@@ -26,3 +26,11 @@ export function isEncrypted(note: Note): boolean {
 export function isArchived(note: Note): boolean {
     return note.archived_at !== null && note.archived_at !== undefined;
 }
+
+export function isValidNote(data: any): data is Note {
+    if (!data || typeof data !== 'object') return false;
+    if (typeof data.id !== 'number') return false;
+    if (typeof data.title !== 'string') return false;
+    if (typeof data.content !== 'string') return false;
+    return true;
+}

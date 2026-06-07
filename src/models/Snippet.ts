@@ -38,3 +38,11 @@ export function isEncrypted(snippet: Snippet): boolean {
 export function isArchived(snippet: Snippet): boolean {
     return snippet.archived_at !== null && snippet.archived_at !== undefined;
 }
+
+export function isValidSnippet(data: any): data is Snippet {
+    if (!data || typeof data !== 'object') return false;
+    if (typeof data.id !== 'number') return false;
+    if (typeof data.title !== 'string') return false;
+    if (typeof data.content !== 'string') return false;
+    return true;
+}

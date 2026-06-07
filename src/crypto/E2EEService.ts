@@ -12,6 +12,7 @@ export class E2EEService {
     private static instance: E2EEService;
     private context: vscode.ExtensionContext;
     private privateKey: CryptoKey | null = null;
+    private publicKey: CryptoKey | null = null;
 
     private constructor(context: vscode.ExtensionContext) {
         this.context = context;
@@ -91,15 +92,7 @@ export class E2EEService {
             const jwkString = new TextDecoder().decode(decryptedBytes);
             const jwk = JSON.parse(jwkString);
 
-            // Use usages from JWK key_ops if present, or default to ['decrypt']
-            const usages: KeyUsage[] = jwk.key_ops || ['decrypt'];
-            const privateKey = await crypto.subtle.importKey(
-                'jwk',
-                jwk,
-                { name: 'RSA-OAEP', hash: 'SHA-256' },
-                true,
-                usages
-            );
+            const privateKey = await RSA.importPrivateKeyFromJWK(jwk);
             return privateKey;
         } catch (e: any) {
             outputChannel.appendLine(`[E2EEService] decrypt and import failed: ${e.message}`);
@@ -159,7 +152,10 @@ export class E2EEService {
                 JSON.stringify(privateKeyJwk)
             );
 
-            const recoveryKey = await deriveKey(password, recoverySalt, iterations, 256);
+            const recoveryCodeBytes = crypto.getRandomValues(new Uint8Array(16));
+            const recoveryCode = Array.from(recoveryCodeBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+            const recoveryKey = await deriveKey(recoveryCode, recoverySalt, iterations, 256);
             const { ciphertext: recoveryCipher, iv: recoveryIv } = await AES.encryptWithAESKey(
                 recoveryKey,
                 JSON.stringify(privateKeyJwk)
@@ -187,7 +183,7 @@ export class E2EEService {
                 if (email) {
                     await this.context.secrets.store('sniphive.masterPassword.' + email, password);
                 }
-                return { success: true };
+                return { success: true, recoveryCodes: [recoveryCode] };
             }
             return { success: false, message: 'E2EE setup failed on server' };
         } catch (e: any) {
@@ -229,14 +225,7 @@ export class E2EEService {
             const jwkString = new TextDecoder().decode(decryptedBytes);
             const jwk = JSON.parse(jwkString);
 
-            const usages: KeyUsage[] = jwk.key_ops || ['decrypt'];
-            const privateKey = await crypto.subtle.importKey(
-                'jwk',
-                jwk,
-                { name: 'RSA-OAEP', hash: 'SHA-256' },
-                true,
-                usages
-            );
+            const privateKey = await RSA.importPrivateKeyFromJWK(jwk);
 
             await this.storePrivateKey(privateKey);
             return true;
@@ -251,10 +240,16 @@ export class E2EEService {
             const privateKey = await this.getPrivateKey();
             if (!privateKey) return null;
 
-            const publicKeyJwk = await RSA.exportPublicKeyToJWK(privateKey);
-            const publicKey = await RSA.importPublicKeyFromJWK(publicKeyJwk);
+            if (!this.publicKey) {
+                const api = SnipHiveApiService.getInstance();
+                const status = await api.getSecurityStatus();
+                if (!status || !status.e2ee_profile) return null;
 
-            const result = await Envelope.sealEnvelope(plaintext, publicKey);
+                const publicKeyJwk = JSON.parse(status.e2ee_profile.public_key_jwk);
+                this.publicKey = await RSA.importPublicKeyFromJWK(publicKeyJwk);
+            }
+
+            const result = await Envelope.sealEnvelope(plaintext, this.publicKey!);
             return {
                 encryptedContent: result.encryptedContent,
                 encryptedDEK: result.encryptedDEK,
@@ -284,5 +279,6 @@ export class E2EEService {
 
     clearPrivateKey() {
         this.privateKey = null;
+        this.publicKey = null;
     }
 }

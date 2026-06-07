@@ -57,7 +57,14 @@
       {
         "command": "sniphive.createSnippet",
         "title": "Create Snippet",
-        "category": "SnipHive"
+        "category": "SnipHive",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "sniphive.createNote",
+        "title": "Create Note",
+        "category": "SnipHive",
+        "icon": "$(file-text)"
       },
       {
         "command": "sniphive.insertSnippet",
@@ -98,7 +105,33 @@
       {
         "command": "sniphive.logout",
         "title": "Logout",
-        "category": "SnipHive"
+        "category": "SnipHive",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "sniphive.switchWorkspace",
+        "title": "Switch Workspace",
+        "category": "SnipHive",
+        "icon": "$(project)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "sniphive.createSnippet",
+        "key": "shift+alt+s",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "sniphive.createNote",
+        "key": "shift+alt+n"
+      },
+      {
+        "command": "sniphive.insertSnippet",
+        "key": "shift+alt+i"
+      },
+      {
+        "command": "sniphive.showRecent",
+        "key": "ctrl+shift+alt+e"
       }
     ],
     "menus": {
@@ -132,27 +165,32 @@
       ],
       "view/title": [
         {
+          "command": "sniphive.createSnippet",
+          "when": "view == sniphiveSnippets || view == sniphiveFavorites || view == sniphivePinned || view == sniphiveArchive",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sniphive.createNote",
+          "when": "view == sniphiveNotes || view == sniphiveFavorites || view == sniphivePinned || view == sniphiveArchive",
+          "group": "navigation@2"
+        },
+        {
           "command": "sniphive.refresh",
           "when": "view == sniphiveSnippets || view == sniphiveNotes || view == sniphiveFavorites || view == sniphivePinned || view == sniphiveArchive",
-          "group": "navigation"
+          "group": "navigation@99"
+        },
+        {
+          "command": "sniphive.switchWorkspace",
+          "when": "view == sniphiveSnippets || view == sniphiveNotes",
+          "group": "navigation@3"
+        },
+        {
+          "command": "sniphive.logout",
+          "when": "view == sniphiveSnippets || view == sniphiveNotes",
+          "group": "navigation@100"
         }
       ]
     },
-    "keybindings": [
-      {
-        "command": "sniphive.createSnippet",
-        "key": "shift+alt+s",
-        "when": "editorHasSelection"
-      },
-      {
-        "command": "sniphive.insertSnippet",
-        "key": "shift+alt+i"
-      },
-      {
-        "command": "sniphive.showRecent",
-        "key": "ctrl+shift+e"
-      }
-    ],
     "viewsContainers": {
       "activitybar": [
         {

@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { outputChannel } from '../extension';
 
 export interface ApiResponse<T> {
@@ -43,10 +44,21 @@ export class SnipHiveApiClient {
         return url;
     }
 
+    private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 30000): Promise<Response> {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const res = await fetch(url, { ...options, signal: controller.signal as any });
+            return res;
+        } finally {
+            clearTimeout(id);
+        }
+    }
+
     private unwrapLaravelData(rawBody: string): string {
         try {
             const parsed = JSON.parse(rawBody);
-            if (parsed && typeof parsed === 'object' && parsed.data && !Array.isArray(parsed.data) && typeof parsed.data === 'object') {
+            if (parsed && typeof parsed === 'object' && 'data' in parsed && !Array.isArray(parsed.data)) {
                 return JSON.stringify(parsed.data);
             }
             return rawBody;
@@ -65,7 +77,7 @@ export class SnipHiveApiClient {
         const url = this.buildUrl(apiUrl, endpoint, queryParams);
         outputChannel.appendLine(`GET ${url}`);
         try {
-            const res = await fetch(url, {
+            const res = await this.fetchWithTimeout(url, {
                 method: 'GET',
                 headers: this.getHeaders(token, workspaceId),
             });
@@ -93,16 +105,13 @@ export class SnipHiveApiClient {
                 page: page.toString(),
                 per_page: '50',
             };
-            if (workspaceId) {
-                params['workspace_id'] = workspaceId;
-            }
 
             const url = this.buildUrl(apiUrl, endpoint, params);
             outputChannel.appendLine(`GET (paginated) ${url}`);
             try {
-                const res = await fetch(url, {
+                const res = await this.fetchWithTimeout(url, {
                     method: 'GET',
-                    headers: this.getHeaders(token),
+                    headers: this.getHeaders(token, workspaceId),
                 });
                 const rawBody = await res.text();
                 if (!res.ok) {
@@ -140,7 +149,7 @@ export class SnipHiveApiClient {
         const url = this.buildUrl(apiUrl, endpoint);
         outputChannel.appendLine(`POST ${url}`);
         try {
-            const res = await fetch(url, {
+            const res = await this.fetchWithTimeout(url, {
                 method: 'POST',
                 headers: this.getHeaders(token, workspaceId),
                 body: body ? JSON.stringify(body) : '{}',
@@ -162,7 +171,7 @@ export class SnipHiveApiClient {
         const url = this.buildUrl(apiUrl, endpoint);
         outputChannel.appendLine(`PUT ${url}`);
         try {
-            const res = await fetch(url, {
+            const res = await this.fetchWithTimeout(url, {
                 method: 'PUT',
                 headers: this.getHeaders(token, workspaceId),
                 body: body ? JSON.stringify(body) : '{}',
@@ -183,7 +192,7 @@ export class SnipHiveApiClient {
         const url = this.buildUrl(apiUrl, endpoint);
         outputChannel.appendLine(`DELETE ${url}`);
         try {
-            const res = await fetch(url, {
+            const res = await this.fetchWithTimeout(url, {
                 method: 'DELETE',
                 headers: this.getHeaders(token, workspaceId),
             });
@@ -217,6 +226,12 @@ export class SnipHiveApiClient {
     }
 
     private handleError(statusCode: number, rawBody: string): ApiResponse<any> {
+        if (statusCode === 401) {
+            outputChannel.appendLine('Received 401 Unauthorized. Triggering logout...');
+            vscode.commands.executeCommand('sniphive.logout');
+            return { success: false, error: 'Session expired. Please log in again.', statusCode, headers: {} };
+        }
+
         let error = 'Request failed';
         try {
             const parsed = JSON.parse(rawBody);

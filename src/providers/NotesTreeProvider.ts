@@ -39,11 +39,12 @@ export class NotesTreeProvider implements vscode.TreeDataProvider<SnipHiveTreeIt
 
         if (this.searchQuery) {
             const q = this.searchQuery.toLowerCase();
-            notes = notes.filter(n =>
-                n.title.toLowerCase().includes(q) ||
-                n.content.toLowerCase().includes(q) ||
-                n.tags.some(t => t.name.toLowerCase().includes(q))
-            );
+            notes = notes.filter(n => {
+                const matchTitle = n.title.toLowerCase().includes(q);
+                const matchTag = n.tags.some(t => t.name.toLowerCase().includes(q));
+                const matchContent = !isEncrypted(n) && n.content.toLowerCase().includes(q);
+                return matchTitle || matchTag || matchContent;
+            });
         }
 
         if (notes.length === 0 && this.cache.isLoading()) {
@@ -65,7 +66,7 @@ export class NotesTreeProvider implements vscode.TreeDataProvider<SnipHiveTreeIt
         const item = new SnipHiveTreeItem(note.title, note.id, note.slug, 'note');
         item.setIcon(isEncrypted(note), note.is_favorite, note.is_pinned);
         item.setLanguageDetail(null, isEncrypted(note), note.updated_at);
-        item.setTooltip(note.title, note.content, null, note.tags.map(t => t.name));
+        item.setTooltip(note.title, note.content, null, note.tags.map(t => t.name), isEncrypted(note));
         item.command = {
             command: 'sniphive.openNoteDetail',
             title: 'Open Note',

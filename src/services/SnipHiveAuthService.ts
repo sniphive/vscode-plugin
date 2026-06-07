@@ -47,9 +47,16 @@ export class SnipHiveAuthService {
                 await this.context.globalState.update(USER_EMAIL_KEY, email);
                 await this.context.globalState.update(USER_NAME_KEY, res.data.user.name);
 
-                if (res.data.workspaces.length > 0) {
+                let wsId: string | undefined;
+                const defaultWs = getSettings().defaultWorkspace;
+                if (defaultWs && res.data.workspaces.some(w => (w.uuid || String(w.id)) === defaultWs)) {
+                    wsId = defaultWs;
+                } else if (res.data.workspaces.length > 0) {
                     const ws = res.data.workspaces[0];
-                    const wsId = ws.uuid || String(ws.id);
+                    wsId = ws.uuid || String(ws.id);
+                }
+
+                if (wsId) {
                     await this.context.globalState.update('sniphive.workspaceId', wsId);
                 }
 
@@ -97,6 +104,14 @@ export class SnipHiveAuthService {
 
     getUserName(): string | undefined {
         return this.context.globalState.get(USER_NAME_KEY);
+    }
+
+    getWorkspaceId(): string | undefined {
+        return this.context.globalState.get('sniphive.workspaceId');
+    }
+
+    async setWorkspaceId(wsId: string | undefined): Promise<void> {
+        await this.context.globalState.update('sniphive.workspaceId', wsId);
     }
 
     isAuthenticated(): boolean {

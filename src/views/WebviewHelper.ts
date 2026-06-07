@@ -1,29 +1,12 @@
 import * as vscode from 'vscode';
 
 export function getNonce(): string {
-    let text = '';
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 64; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 }
 
-export function createWebviewPanel(
-    title: string,
-    viewType: string,
-    column: vscode.ViewColumn = vscode.ViewColumn.One
-): vscode.WebviewPanel {
-    const panel = vscode.window.createWebviewPanel(
-        viewType, title, column,
-        {
-            enableScripts: true,
-            retainContextWhenHidden: true,
-            localResourceRoots: [],
-        }
-    );
-    return panel;
-}
+
 
 export function getWebviewHtml(
     webview: vscode.Webview,
@@ -47,7 +30,7 @@ export function getWebviewHtml(
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="${csp.replace(/\s+/g, ' ').trim()}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${title}</title>
+    <title>${sanitizeHtml(title)}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">

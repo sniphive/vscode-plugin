@@ -42,8 +42,8 @@ export class SnipHiveTreeItem extends vscode.TreeItem {
         this.description = parts.join(' · ');
     }
 
-    setTooltip(title: string, content: string, language: string | null, tags: string[]) {
-        const preview = content.length > 200 ? content.substring(0, 200) + '...' : content;
+    setTooltip(title: string, content: string, language: string | null, tags: string[], isEncryptedContent: boolean = false) {
+        const preview = isEncryptedContent ? '🔒 Encrypted content' : (content.length > 200 ? content.substring(0, 200) + '...' : content);
         const parts: string[] = [title];
         if (language) parts.push(`Language: ${language}`);
         if (tags.length) parts.push(`Tags: ${tags.join(', ')}`);

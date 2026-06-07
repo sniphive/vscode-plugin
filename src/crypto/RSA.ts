@@ -20,20 +20,22 @@ export async function exportPrivateKeyToJWK(key: CryptoKey): Promise<JsonWebKey>
 }
 
 export async function importPublicKeyFromJWK(jwk: JsonWebKey): Promise<CryptoKey> {
+    delete jwk.key_ops;
     return crypto.subtle.importKey(
         'jwk', jwk,
         { name: 'RSA-OAEP', hash: 'SHA-256' },
         true,
-        ['encrypt', 'wrapKey']
+        ['encrypt']
     );
 }
 
 export async function importPrivateKeyFromJWK(jwk: JsonWebKey): Promise<CryptoKey> {
+    delete jwk.key_ops;
     return crypto.subtle.importKey(
         'jwk', jwk,
         { name: 'RSA-OAEP', hash: 'SHA-256' },
         true,
-        ['decrypt', 'unwrapKey']
+        ['decrypt']
     );
 }
 
